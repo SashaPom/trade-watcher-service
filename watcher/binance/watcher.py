@@ -47,11 +47,29 @@ class BinanceWatcher(BaseWatcher):
         return self.client.new_order(symbol, side, MARKET, quantity=qty)
 
     def update_balance_(self):
-        for balance in self.get_balance():
+        balances = self.get_balance()
+        print("[DEBUG] Binance balances:", balances)
+        for balance in balances:
             if balance['asset'] == USDT:
                 self.available_balance = Decimal(balance['availableBalance'])
                 self.balance = Decimal(balance['balance'])
                 self.un_pnl = Decimal(balance['crossUnPnl'])
+            self.send_message("UPDATE_PROFILE")
+
+        print("[DEBUG] After update:", self.available_balance, self.balance, self.un_pnl)
+
+        payload = {
+                "id": self.id,
+                "available_balance": str(self.available_balance),
+                "balance": str(self.balance),
+                "pnl": str(self.un_pnl),
+                }
+        try:
+            import requests
+            requests.post(URL_UPDATE_PROFILE, json=payload, timeout=5)
+        except Exception as e:
+            print(f"[ERROR] Update profile request failed: {e}")
+
 
     def close_trade(self, symbol: str, qty: str):
         print('NEW ORDER!!!!!!', qty)

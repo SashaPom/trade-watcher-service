@@ -3,6 +3,8 @@ from decimal import Decimal
 from okx import Account, Trade
 
 from config import TESTNET
+from config import URL_UPDATE_PROFILE
+
 from watcher.base_watcher import BaseWatcher
 from watcher.exceptions import AccountCanNotTrade
 from watcher.okx.constants import FUTURES, MARKET, OrderSide, USDT
@@ -40,11 +42,32 @@ class OKXWatcher(BaseWatcher):
         return self.trade_api_client.place_multiple_orders(orders)
 
     def update_balance_(self):
-        for balance in self.get_balance()[0]['details']:
+        balances = self.get_balance()
+        print("[DEBUG] OKX balances:", balances)
+        for balance in balances:
             if balance['ccy'] == USDT:
                 self.available_balance = Decimal(balance['availBal'])
                 self.balance = Decimal(balance['cashBal'])
                 self.un_pnl = Decimal(balance['upl'])
+            self.send_message("UPDATE_PROFILE")
+
+        print("[DEBUG] After update:", self.available_balance, self.balance, self.un_pnl)
+
+        payload = {
+                "id": self.id,
+                "available_balance": str(self.available_balance),
+                "balance": str(self.balance),
+                "pnl": str(self.un_pnl),
+                "max_balance": str(self.max_balance),
+                "lose_streak": self.lose_streak,
+                "trade_now": self.is_trade_now,
+                "blocked": self.is_blocked,
+            }
+        try:
+            request_to_main(URL_UPDATE_PROFILE, method="POST", json=payload)
+        except Exception as e:
+            print("sync error:", e)
+
 
     def close_trades(self):
         if self.is_trade_now:
