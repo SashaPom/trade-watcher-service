@@ -6,7 +6,7 @@ from typing import Iterable, List, Optional
 import websockets
 from websockets import WebSocketServerProtocol
 
-from config import URL_PROFILES  # например: "http://django:8001/tw/api/watcher/profiles/"
+from config.ws_server import URL_PROFILES
 from utils import run_in_thread, request_to_main
 from watcher import Manager
 
@@ -14,17 +14,14 @@ log = logging.getLogger(__name__)
 
 
 async def _stream_watchers(ws: WebSocketServerProtocol, ids: Iterable[int], interval_sec: float = 3.0):
-    """
-    Периодически шлёт витрину по указанным watcher-id пока соединение открыто.
-    """
-    # Получаем объекты вотчеров одним махом
+
     watchers = []
     for wid in ids:
         w = await Manager.async_get_watcher(wid)
         if w:
             watchers.append(w)
 
-    # Пустая подписка — сразу выходим
+
     if not watchers:
         await ws.send("[]")
         return
@@ -46,7 +43,7 @@ async def _stream_watchers(ws: WebSocketServerProtocol, ids: Iterable[int], inte
             await ws.send(json.dumps(payload))
             await asyncio.sleep(interval_sec)
     except websockets.exceptions.ConnectionClosed:
-        # клиент закрыл соединение — просто выходим из стрима
+
         pass
 
 
@@ -58,8 +55,8 @@ def update_profiles():
       - существующие → обновить поля
       - отсутствующие → остановить их watcher
     """
-    profiles = request_to_main(URL_PROFILES)
-    log.info("profiles fetched: %s", profiles)
+    profiles = request_to_main(URL_PROFILES) or []
+    log.info("update_profiles(): fetched %s items from %s", len(profiles or []), URL_PROFILES)
 
     seen_ids: List[int] = []
     for profile in profiles:

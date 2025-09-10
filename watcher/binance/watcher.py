@@ -4,6 +4,8 @@ from binance.error import ClientError, ServerError
 from binance.um_futures import UMFutures
 
 from config import binance, TESTNET
+from config.ws_server import URL_UPDATE_PROFILE
+
 from watcher.base_watcher import BaseWatcher
 from watcher.binance.constants import MARKET, USDT, OrderSide
 from watcher.binance.utils import limit_usage_from_response

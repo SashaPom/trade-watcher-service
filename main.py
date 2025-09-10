@@ -10,7 +10,7 @@ import ws
 from config import WS_ADDRESS, WS_PORT, SSL_CERTFILE, SSL_KEYFILE, EXCHANGE_NAME
 from handler import handler_watcher, update_profiles
 from watcher.dump_watchers import load_watchers, dump_watchers
-
+import tg_bot
 
 def _start_health_server():
     class _H(http.server.SimpleHTTPRequestHandler):
@@ -83,6 +83,7 @@ def main_():
         update_profiles()
 
     try:
+        update_profiles()
         server.run()
     except KeyboardInterrupt:
         dump_watchers()

@@ -14,7 +14,7 @@ def dump_watchers():
 
 def load_watchers():
     dump = load_watcher_profiles()
-    profiles = request_to_main(URL_PROFILES)
+    profiles = request_to_main(URL_PROFILES) or []
 
     for profile in profiles:
         dump_ = dump.get(str(profile['id']))

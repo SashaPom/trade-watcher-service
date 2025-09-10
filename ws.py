@@ -8,7 +8,7 @@ from websockets import WebSocketServerProtocol
 class Server:
     def __init__(self, handler, host: str, port: int, ssl_context=None):
         self.handler = handler
-        self.host = host
+        self.host = "0.0.0.0"
         self.port = port
         self.ssl_context = ssl_context
 

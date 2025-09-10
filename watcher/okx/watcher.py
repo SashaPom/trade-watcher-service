@@ -3,7 +3,7 @@ from decimal import Decimal
 from okx import Account, Trade
 
 from config import TESTNET
-from config import URL_UPDATE_PROFILE
+from config.ws_server import URL_UPDATE_PROFILE
 
 from watcher.base_watcher import BaseWatcher
 from watcher.exceptions import AccountCanNotTrade

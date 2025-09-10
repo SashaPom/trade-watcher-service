@@ -6,7 +6,7 @@ from decimal import Decimal
 from itertools import repeat
 from typing import Optional, Union, Iterable, Generator
 
-import telegram
+import tg_bot
 from utils import do_nothing, get_now
 from watcher.exceptions import AccountCanNotTrade, StopWatcher
 from watcher.utils import watcher_handle_exceptions
@@ -41,6 +41,9 @@ class BaseWatcher(ABC, threading.Thread):
     next_clear_checking_datetime: Optional[datetime] = None
 
     telegram_chat_id: Union[int, str]
+
+    _last_tg_ts: float = 0
+    _min_tg_interval_sec: float = 5.0
 
     checks: list
     sleep_time: int = 1
@@ -129,8 +132,6 @@ class BaseWatcher(ABC, threading.Thread):
         self.is_trade_now = self.available_balance != self.balance
         self.max_balance = max(self.max_balance, self.balance)
 
-        # print(self.available_balance, self.balance, self.un_pnl, self.is_trade_now, self.max_balance,
-        #       self.lose_streak)
 
     @abstractmethod
     def close_trades(self):
@@ -243,8 +244,16 @@ class BaseWatcher(ABC, threading.Thread):
         return False
 
     def send_message(self, message: str):
-        if self.telegram_chat_id:
-            telegram.send_message(
+        if not self.telegram_chat_id:
+            return
+        now = time.time()
+        if now - getattr(self, "_last_tg_ts", 0) < self._min_tg_interval_sec:
+            return
+        self._last_tg_ts = now
+        try:
+            tg_bot.send_message(
                 self.telegram_chat_id,
                 f'({self.exchange_name}) [{self.name_}] {message}'
             )
+        except Exception as e:
+            print(f"[Telegram][ERROR] send_message failed: {e}")
