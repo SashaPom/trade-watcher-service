@@ -14,37 +14,71 @@ log = logging.getLogger(__name__)
 
 
 async def _stream_watchers(ws: WebSocketServerProtocol, ids: Iterable[int], interval_sec: float = 3.0):
-
-    watchers = []
+    watchers = {}
     for wid in ids:
         w = await Manager.async_get_watcher(wid)
         if w:
-            watchers.append(w)
+            watchers[wid] = w
 
+    def row(w):
+        return [
+            w.id,
+            str(w.balance),
+            str(w.max_balance),
+            str(w.available_balance),
+            str(w.un_pnl),
+            bool(w.is_blocked),
+            bool(w.is_trade_now),
+            int(w.lose_streak),
+        ]
 
-    if not watchers:
-        await ws.send("[]")
-        return
+    initial = []
+    for w in watchers.values():
+        try:
+            w.update_balance()
+        except Exception as e:
+            print(f"[ERROR] initial update_balance for {w.id} failed: {e}")
+        initial.append(row(w))
+    if initial:
+        await ws.send(json.dumps(initial))
+
+    last: dict[int, list] = {}
+    alive_ids = set(watchers.keys())
 
     try:
         while True:
-            payload = []
-            for w in watchers:
-                payload.append([
-                    w.id,
-                    str(w.balance),
-                    str(w.max_balance),
-                    str(w.available_balance),
-                    str(w.un_pnl),
-                    w.is_blocked,
-                    w.is_trade_now,
-                    w.lose_streak,
-                ])
-            await ws.send(json.dumps(payload))
+            changed = []
+            current_ids = set()
+
+            for wid, w in list(watchers.items()):
+                current_ids.add(wid)
+                try:
+                    w.update_balance()
+                except Exception as e:
+                    print(f"[WARN] update_balance for {wid} failed: {e}")
+                    continue
+
+                r = row(w)
+                if r != last.get(wid):
+                    last[wid] = r
+                    changed.append(r)
+
+            # если какой-то id пропал (например, stop) → шлём нули
+            stopped_ids = set(last.keys()) - current_ids
+            for sid in stopped_ids:
+                zero_row = [sid, "0", "0", "0", "0", False, False, 0]
+                changed.append(zero_row)
+                last[sid] = zero_row
+
+            if changed:
+                await ws.send(json.dumps(changed))
+
+            alive_ids = current_ids
+
             await asyncio.sleep(interval_sec)
     except websockets.exceptions.ConnectionClosed:
-
         pass
+
 
 
 @run_in_thread
@@ -70,25 +104,14 @@ def update_profiles():
             watcher = Manager.create_watcher(profile)
             Manager.start_watcher(watcher)
 
-    # выключаем лишние
     for wid, watcher in list(Manager.get_watcher_dict().items()):
         if wid not in seen_ids:
             watcher.stop()
 
 
 async def handler_watcher(ws: WebSocketServerProtocol, uri: str):
-    """
-    Универсальный WS-хэндлер:
-      - НЕ ждёт первое сообщение, сразу отвечает "hello"
-      - Принимает команды:
-          "update"         → синхронизировать профили (в отдельном потоке)
-          "1.2.3" | "5"    → подписаться на ids; предыдущая подписка отменяется
-      - Любая новая подписка отменяет старую
-    """
-    # Активная задача стрима по этому соединению (чтобы отменять при новой подписке)
     stream_task: Optional[asyncio.Task] = None
 
-    # приветственное сообщение, чтобы клиент понял, что сокет жив
     try:
         await ws.send(json.dumps({"type": "hello"}))
     except websockets.exceptions.ConnectionClosed:
