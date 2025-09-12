@@ -13,13 +13,7 @@ from watcher import Manager
 log = logging.getLogger(__name__)
 
 
-async def _stream_watchers(ws: WebSocketServerProtocol, ids: Iterable[int], interval_sec: float = 3.0):
-    watchers = {}
-    for wid in ids:
-        w = await Manager.async_get_watcher(wid)
-        if w:
-            watchers[wid] = w
-
+async def _stream_watchers(ws: WebSocketServerProtocol, ids: Iterable[int], interval_sec: float = 1.0):
     def row(w):
         return [
             w.id,
@@ -32,48 +26,39 @@ async def _stream_watchers(ws: WebSocketServerProtocol, ids: Iterable[int], inte
             int(w.lose_streak),
         ]
 
-    initial = []
-    for w in watchers.values():
-        try:
-            w.update_balance()
-        except Exception as e:
-            print(f"[ERROR] initial update_balance for {w.id} failed: {e}")
-        initial.append(row(w))
-    if initial:
-        await ws.send(json.dumps(initial))
-
+    ids = [int(x) for x in ids if isinstance(x, int) or (isinstance(x, str) and x.isdigit())]
     last: dict[int, list] = {}
-    alive_ids = set(watchers.keys())
 
     try:
         while True:
             changed = []
-            current_ids = set()
+            current_watchers = {}
+            for wid in ids:
+                w = await Manager.async_get_watcher(wid)
+                if w:
+                    current_watchers[wid] = w
 
-            for wid, w in list(watchers.items()):
-                current_ids.add(wid)
+            alive_ids = set()
+            for wid, w in current_watchers.items():
                 try:
                     w.update_balance()
-                except Exception as e:
-                    print(f"[WARN] update_balance for {wid} failed: {e}")
+                except Exception:
                     continue
-
+                alive_ids.add(wid)
                 r = row(w)
                 if r != last.get(wid):
                     last[wid] = r
                     changed.append(r)
 
-            # если какой-то id пропал (например, stop) → шлём нули
-            stopped_ids = set(last.keys()) - current_ids
-            for sid in stopped_ids:
-                zero_row = [sid, "0", "0", "0", "0", False, False, 0]
-                changed.append(zero_row)
-                last[sid] = zero_row
+            for wid in ids:
+                if wid not in alive_ids:
+                    zero_row = [wid, "0", "0", "0", "0", False, False, 0]
+                    if zero_row != last.get(wid):
+                        last[wid] = zero_row
+                        changed.append(zero_row)
 
             if changed:
                 await ws.send(json.dumps(changed))
-
-            alive_ids = current_ids
 
             await asyncio.sleep(interval_sec)
     except websockets.exceptions.ConnectionClosed:
@@ -83,15 +68,7 @@ async def _stream_watchers(ws: WebSocketServerProtocol, ids: Iterable[int], inte
 
 @run_in_thread
 def update_profiles():
-    """
-    Тянем профили из Django и синхронизируем менеджер вотчеров:
-      - новые профили → создать watcher и запустить
-      - существующие → обновить поля
-      - отсутствующие → остановить их watcher
-    """
     profiles = request_to_main(URL_PROFILES) or []
-    log.info("update_profiles(): fetched %s items from %s", len(profiles or []), URL_PROFILES)
-
     seen_ids: List[int] = []
     for profile in profiles:
         pid = int(profile["id"])
@@ -127,25 +104,16 @@ async def handler_watcher(ws: WebSocketServerProtocol, uri: str):
                 continue
 
             if text.lower() == "update":
-                # подтянуть профили/переназначения
                 update_profiles()
-                # можно коротко ответить
                 await ws.send(json.dumps({"type": "ok", "cmd": "update"}))
                 continue
 
-            # подписка на витрины по id-списку, разделённому точками: "1.2.3"
-            # допускаем и одиночное число "42"
             try:
-                if "." in text:
-                    ids = [int(x) for x in text.split(".") if x.isdigit()]
-                else:
-                    ids = [int(text)]
+                ids = [int(x) for x in text.split(".") if x.isdigit()] if "." in text else [int(text)]
             except ValueError:
-                # неизвестная команда — игнор
                 await ws.send(json.dumps({"type": "error", "msg": "bad command"}))
                 continue
 
-            # отменяем предыдущий стрим, если был
             if stream_task and not stream_task.done():
                 stream_task.cancel()
                 try:
@@ -153,15 +121,13 @@ async def handler_watcher(ws: WebSocketServerProtocol, uri: str):
                 except asyncio.CancelledError:
                     pass
 
-            # запускаем новый стрим
             stream_task = asyncio.create_task(_stream_watchers(ws, ids))
 
     except websockets.exceptions.ConnectionClosed:
-        pass
+        log.info("WebSocket closed by client")
     except Exception as e:
         log.exception("WS handler error: %s", e)
     finally:
-        # гарантированно гасим активный стрим при закрытии
         if stream_task and not stream_task.done():
             stream_task.cancel()
             try:

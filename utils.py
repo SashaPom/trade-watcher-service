@@ -60,6 +60,7 @@ def request_to_main(
       - при неудаче возвращает []
     """
     headers = {"addr": _addr_header()}
+    log.info("[WATCHER] request_to_main url=%s addr_header=%s", url,headers["addr"])
     body = None
 
     m = (method or "GET").upper()

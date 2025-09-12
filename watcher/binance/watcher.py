@@ -50,7 +50,6 @@ class BinanceWatcher(BaseWatcher):
 
     def update_balance_(self):
         balances = self.get_balance()
-        print("[DEBUG] Binance balances:", balances)
         for balance in balances:
             if balance['asset'] == USDT:
                 self.available_balance = Decimal(balance['availableBalance'])
