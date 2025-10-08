@@ -250,6 +250,12 @@ class BaseWatcher(ABC, threading.Thread):
         if now - getattr(self, "_last_tg_ts", 0) < self._min_tg_interval_sec:
             return
         self._last_tg_ts = now
+
+        MAX = 1000
+        if len(message) > MAX:
+            tail = message[-100:]
+            message = message[:MAX] + "..." + tail
+
         try:
             tg_bot.send_message(
                 self.telegram_chat_id,

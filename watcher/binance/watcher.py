@@ -1,3 +1,5 @@
+import requests
+
 from decimal import Decimal
 
 from binance.error import ClientError, ServerError
@@ -50,6 +52,7 @@ class BinanceWatcher(BaseWatcher):
 
     def update_balance_(self):
         balances = self.get_balance()
+        print("[DEBUG] Binance balances:", balances)
         for balance in balances:
             if balance['asset'] == USDT:
                 self.available_balance = Decimal(balance['availableBalance'])
@@ -66,7 +69,6 @@ class BinanceWatcher(BaseWatcher):
                 "pnl": str(self.un_pnl),
                 }
         try:
-            import requests
             requests.post(URL_UPDATE_PROFILE, json=payload, timeout=5)
         except Exception as e:
             print(f"[ERROR] Update profile request failed: {e}")

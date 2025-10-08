@@ -79,11 +79,11 @@ def update_profiles():
             Manager.update_watcher(profile, watcher)
         else:
             watcher = Manager.create_watcher(profile)
-            Manager.start_watcher(watcher)
+            Manager.start_watcher(watcher, strict=False)
 
     for wid, watcher in list(Manager.get_watcher_dict().items()):
         if wid not in seen_ids:
-            watcher.stop()
+            Manager.stop_watcher(watcher)
 
 
 async def handler_watcher(ws: WebSocketServerProtocol, uri: str):
