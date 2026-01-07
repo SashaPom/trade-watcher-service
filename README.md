@@ -38,6 +38,7 @@ This service is the **runtime/agent** part of the Risk Manager system.
    Server sends:
    ```json
    { "type": "hello" }
+   ```json
 
 ---
 
