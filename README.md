@@ -35,9 +35,9 @@ This service is the **runtime/agent** part of the Risk Manager system.
 ## WebSocket protocol (UI <-> Watcher)
 
 ### On connect
-Server sends:
-```json
-{ "type": "hello" }
+   Server sends:
+   ```json
+   { "type": "hello" }
 
 ---
 
