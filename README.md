@@ -39,22 +39,6 @@ Server sends:
 ```json
 { "type": "hello" }
 
+---
+
 ## Commands from client (UI)
-
-### **Update profiles**
-- **UI sends:** `update`
-- **Server reloads** profiles from Django and replies: `{ "type": "ok", "cmd": "update" }`
-
-### **Subscribe to live stream**
-- **UI sends** a string with IDs separated by dots: `1.4.5`
-- *(or a single id: `"3"`)*
-- **Server starts streaming** updates for these IDs.
-
-### **Streaming payload (server -> UI)**
-- **Server sends** JSON array of rows (**only changed rows**):
-```json
-[
-  [5, "98.0", "100.0", "100.0", "-2.0", true, false, 3],
-  [9, "120.5", "125.0", "120.5", "0.5", false, true, 0]
-]
-
